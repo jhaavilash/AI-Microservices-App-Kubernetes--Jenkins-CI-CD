@@ -1,0 +1,23 @@
+pipeline {
+  agent any
+
+  stages {
+    stage('Build') {
+      steps {
+        sh 'docker build -t yourdocker/backend ./backend'
+      }
+    }
+
+    stage('Push') {
+      steps {
+        sh 'docker push yourdocker/backend'
+      }
+    }
+
+    stage('Deploy') {
+      steps {
+        sh 'kubectl apply -f k8s/'
+      }
+    }
+  }
+}

@@ -1,24 +1,174 @@
 <!DOCTYPE html>
 <html>
+<head>
+  <title>Sentiment Analyzer</title>
+
+  <!-- Chart.js for analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      text-align: center;
+      padding: 50px;
+    }
+
+    .container {
+      background: white;
+      color: black;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 500px;
+      margin: auto;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    input {
+      width: 80%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      background: #667eea;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #5a67d8;
+    }
+
+    #result {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+
+    .history {
+      margin-top: 20px;
+      text-align: left;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      padding: 5px;
+      border-bottom: 1px solid #eee;
+    }
+
+    canvas {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
 <body>
-<h2>Sentiment App</h2>
-<input id="text" />
-<button onclick="send()">Check</button>
-<p id="result"></p>
+
+<div class="container">
+  <h2>💬 Sentiment Analyzer</h2>
+
+  <input id="text" placeholder="Enter your text..." />
+  <br>
+  <button onclick="send()">Analyze</button>
+
+  <p id="result"></p>
+
+  <div class="history" id="history"></div>
+
+  <canvas id="chart" width="300" height="200"></canvas>
+</div>
 
 <script>
+let stats = {
+  positive: 0,
+  negative: 0,
+  neutral: 0
+};
+
+let chart;
+
+// Initialize chart
+function initChart() {
+  const ctx = document.getElementById('chart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: ['Positive', 'Negative', 'Neutral'],
+      datasets: [{
+        data: [0, 0, 0],
+        backgroundColor: ['#48bb78', '#f56565', '#ed8936']
+      }]
+    }
+  });
+}
+
 async function send() {
   const text = document.getElementById("text").value;
+  const resultEl = document.getElementById("result");
 
-  const res = await fetch('/predict', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ text })
-  });
+  if (!text) {
+    resultEl.innerText = "⚠️ Please enter text";
+    return;
+  }
 
-  const data = await res.json();
-  document.getElementById("result").innerText = data.sentiment;
+  resultEl.innerText = "⏳ Analyzing...";
+
+  try {
+    const res = await fetch('/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text })
+    });
+
+    const data = await res.json();
+    const sentiment = data.sentiment.toLowerCase();
+
+    resultEl.innerText = `Sentiment: ${sentiment}`;
+
+    // Update stats
+    if (stats[sentiment] !== undefined) {
+      stats[sentiment]++;
+    }
+
+    updateHistory(text, sentiment);
+    updateChart();
+
+  } catch (err) {
+    resultEl.innerText = "❌ Error connecting to server";
+  }
 }
+
+function updateHistory(text, sentiment) {
+  const history = document.getElementById("history");
+  const div = document.createElement("div");
+  div.className = "history-item";
+  div.innerText = `"${text}" → ${sentiment}`;
+  history.prepend(div);
+}
+
+function updateChart() {
+  chart.data.datasets[0].data = [
+    stats.positive,
+    stats.negative,
+    stats.neutral
+  ];
+  chart.update();
+}
+
+// Initialize on load
+window.onload = initChart;
 </script>
 </body>
 </html>

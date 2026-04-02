@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: yourdocker/frontend
+        image: nginx:alpine
         ports:
         - containerPort: 80 
 

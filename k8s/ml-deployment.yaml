@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: ml
-        image: yourdocker/ml-service
+        image: python:3.9-slim
         ports:
         - containerPort: 5000
         securityContext:

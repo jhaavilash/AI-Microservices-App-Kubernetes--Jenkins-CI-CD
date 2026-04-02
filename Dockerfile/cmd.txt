@@ -1,0 +1,7 @@
+docker build -t yourdocker/backend ./backend
+docker build -t yourdocker/ml-service ./ml-service
+docker build -t yourdocker/frontend ./frontend
+
+docker push yourdocker/backend
+docker push yourdocker/ml-service
+docker push yourdocker/frontend

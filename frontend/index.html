@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h2>Sentiment App</h2>
+<input id="text" />
+<button onclick="send()">Check</button>
+<p id="result"></p>
+
+<script>
+async function send() {
+  const text = document.getElementById("text").value;
+
+  const res = await fetch('/predict', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ text })
+  });
+
+  const data = await res.json();
+  document.getElementById("result").innerText = data.sentiment;
+}
+</script>
+</body>
+</html>

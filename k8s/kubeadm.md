@@ -87,7 +87,7 @@ sudo chown "$(id -u)":"$(id -g)" "$HOME"/.kube/config
 
 
 # Network Plugin = calico
-kubectl apply -f curl -O https://raw.githubusercontent.com/projectcalico/calico/v3.31.4/manifests/custom-resources-bpf.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.31.4/manifests/custom-resources-bpf.yaml
 
 
 kubeadm token create --print-join-command

@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS monitors (
   id INT AUTO_INCREMENT PRIMARY KEY,
   url VARCHAR(255) NOT NULL,
   interval_time INT NOT NULL,
+  monitor_type ENUM('HTTP', 'PING', 'PORT') DEFAULT 'HTTP',
+  port INT DEFAULT NULL,
   status ENUM('UNKNOWN','UP','DOWN') DEFAULT 'UNKNOWN',
   response_time INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -29,6 +31,9 @@ CREATE TABLE IF NOT EXISTS monitor_logs (
   monitor_id INT NOT NULL,
   status ENUM('UNKNOWN','UP','DOWN') NOT NULL,
   response_time INT DEFAULT 0,
+  cpu_usage FLOAT DEFAULT 0,
+  mem_usage FLOAT DEFAULT 0,
+  disk_usage FLOAT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
 );

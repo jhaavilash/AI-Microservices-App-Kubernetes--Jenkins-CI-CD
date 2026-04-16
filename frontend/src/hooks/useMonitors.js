@@ -5,7 +5,7 @@ export default function useMonitors() {
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
 
-  const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
+  const API_BASE = process.env.REACT_APP_API_BASE_URL || (window.location.origin + "/api");
 
   const fetchJson = useCallback(async (url) => {
     const headers = { "Content-Type": "application/json" };

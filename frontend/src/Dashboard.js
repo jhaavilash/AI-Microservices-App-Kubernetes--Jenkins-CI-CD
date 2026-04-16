@@ -20,7 +20,14 @@ import {
   Alert,
   IconButton,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
+  Paper
 } from "@mui/material";
 import LogoutIcon from '@mui/icons-material/Logout';
 
@@ -42,17 +49,57 @@ import useMonitors from "./hooks/useMonitors";
 function Dashboard({ onLogout }) {
   const [url, setUrl] = useState("");
   const [interval, setInterval] = useState(1);
+  const [monitorType, setMonitorType] = useState("HTTP");
+  const [port, setPort] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [searchText, setSearchText] = useState("");
   const [alertOpen, setAlertOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedMonitor, setSelectedMonitor] = useState(null);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "info" });
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const alertSoundRef = useRef(null);
 
-  const intervals = [1, 2, 3, 5, 8, 10, 20];
+  const intervals = [1, 2, 3, 4, 5, 8, 10, 20];
 
-  const { monitors, refresh, error } = useMonitors();
+  const { monitors, logs, refresh, error } = useMonitors();
+
+  const filteredLogs = useMemo(() => {
+    const fromDate = new Date(dateFrom).setHours(0, 0, 0, 0);
+    const toDate = new Date(dateTo).setHours(23, 59, 59, 999);
+
+    return logs
+      .filter((log) => {
+        const logDate = new Date(log.created_at).getTime();
+        return logDate >= fromDate && logDate <= toDate;
+      })
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }, [logs, dateFrom, dateTo]);
+
+  const uptimeRangeData = useMemo(() => {
+    const dayMap = {};
+
+    filteredLogs.forEach((log) => {
+      const day = new Date(log.created_at).toISOString().slice(0, 10);
+      if (!dayMap[day]) {
+        dayMap[day] = { total: 0, upCount: 0 };
+      }
+      dayMap[day].total += 1;
+      if (log.status === "UP") dayMap[day].upCount += 1;
+    });
+
+    return Object.entries(dayMap)
+      .sort(([a], [b]) => new Date(a) - new Date(b))
+      .map(([day, values]) => ({
+        date: day,
+        uptime: Number(((values.upCount / values.total) * 100).toFixed(2))
+      }));
+  }, [filteredLogs]);
 
   const playAlertSound = () => {
     try {
@@ -109,6 +156,20 @@ function Dashboard({ onLogout }) {
     return { activeMonitors, totalUptime, avgResponse, downCount, uptimeChartData };
   }, [filteredMonitors]);
 
+  const performanceChartData = useMemo(() => {
+    // Group logs by time (every 5 mins or so) for performance charts
+    // For simplicity, just use the last 20 logs
+    return [...logs]
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .slice(-20)
+      .map(log => ({
+        time: new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cpu: log.cpu_usage || 0,
+        mem: log.mem_usage || 0,
+        disk: log.disk_usage || 0
+      }));
+  }, [logs]);
+
   useEffect(() => {
     const savedFilter = localStorage.getItem("dashboardStatusFilter");
     const savedSearch = localStorage.getItem("dashboardSearchText");
@@ -139,28 +200,61 @@ function Dashboard({ onLogout }) {
   }, [groupedMetrics.downCount, soundEnabled]);
 
   const addMonitor = async () => {
-    if (!url.trim()) return;
+    if (!url.trim()) {
+      setSnack({ open: true, message: "Enter URL to add", severity: "warning" });
+      return;
+    }
 
     try {
-      const apiBase = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
+      const apiBase = process.env.REACT_APP_API_BASE_URL || (window.location.origin + "/api");
       const res = await fetch(`${apiBase}/monitor`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ url, interval })
+        body: JSON.stringify({ 
+          url, 
+          interval, 
+          type: monitorType,
+          port: monitorType === "PORT" ? Number(port) : null 
+        })
       });
 
-      if (!res.ok) {
-        const errMessage = await res.text();
-        throw new Error(errMessage || "Failed to add monitor");
+      const data = await res.json();
+      if (!res.ok && res.status !== 201) {
+        throw new Error(data.error || "Failed to add monitor");
       }
 
-      setSnack({ open: true, message: "Monitor added", severity: "success" });
+      setSnack({ open: true, message: data.message || "Monitor added", severity: "success" });
       setUrl("");
       refresh();
     } catch (err) {
       setSnack({ open: true, message: err.message, severity: "error" });
+    }
+  };
+
+  const testMonitor = async () => {
+    if (!url.trim()) {
+      setSnack({ open: true, message: "Enter a URL first", severity: "warning" });
+      return;
+    }
+
+    try {
+      const apiBase = process.env.REACT_APP_API_BASE_URL || (window.location.origin + "/api");
+      const response = await fetch(`${apiBase}/monitor/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, type: checkType })
+      });
+      const result = await response.json();
+
+      if (response.ok) {
+        setSnack({ open: true, message: `Check OK (${result.status}, ${result.responseTime}ms)`, severity: "success" });
+      } else {
+        setSnack({ open: true, message: `Check failed: ${result.error || result.status}`, severity: "error" });
+      }
+    } catch (err) {
+      setSnack({ open: true, message: `Check error: ${err.message}`, severity: "error" });
     }
   };
 
@@ -199,7 +293,7 @@ function Dashboard({ onLogout }) {
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ mt: 2, mb: 1, display: "flex", gap: 2, flexWrap: "wrap" }}>
+      <Box sx={{ mt: 2, mb: 1, display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
         <TextField
           label="Search URL"
           value={searchText}
@@ -219,6 +313,35 @@ function Dashboard({ onLogout }) {
             <MenuItem key={s} value={s}>{s}</MenuItem>
           ))}
         </TextField>
+
+        <TextField
+          label="From"
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          size="small"
+        />
+        <TextField
+          label="To"
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          size="small"
+        />
+        <TextField
+          select
+          label="Check Type"
+          value={checkType}
+          onChange={(e) => setCheckType(e.target.value)}
+          size="small"
+          sx={{ width: 140 }}
+        >
+          {["http", "ping", "auto"].map((type) => (
+            <MenuItem key={type} value={type}>{type.toUpperCase()}</MenuItem>
+          ))}
+        </TextField>
         <Button variant="text" onClick={() => { setSearchText(''); setStatusFilter('ALL'); }}>
           Clear Filter
         </Button>
@@ -232,12 +355,75 @@ function Dashboard({ onLogout }) {
           }
           label="Alert Sound"
         />
+
+        <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Grid container spacing={1} alignItems="center">
+            <Grid item xs={12} md={3}>
+              <TextField
+                select
+                fullWidth
+                label="Monitor Type"
+                value={monitorType}
+                onChange={(e) => setMonitorType(e.target.value)}
+                size="small"
+              >
+                {["HTTP", "PING", "PORT"].map((t) => (
+                  <MenuItem key={t} value={t}>{t}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label={monitorType === "PORT" ? "Host / IP" : "Enter URL"}
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                size="small"
+              />
+            </Grid>
+            {monitorType === "PORT" && (
+              <Grid item xs={12} md={2}>
+                <TextField
+                  fullWidth
+                  label="Port"
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  size="small"
+                />
+              </Grid>
+            )}
+            <Grid item xs={12} md={2}>
+              <TextField
+                select
+                fullWidth
+                label="Interval"
+                value={interval}
+                onChange={(e) => setInterval(e.target.value)}
+                size="small"
+              >
+                {intervals.map((i) => (
+                  <MenuItem key={i} value={i}>{i} min</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={1}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={addMonitor}
+                sx={{ height: "40px" }}
+              >
+                Add
+              </Button>
+            </Grid>
+          </Grid>
+        </Box>
       </Box>
 
       <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
         <Box sx={{ width: 240, minHeight: "calc(100vh - 100px)", bgcolor: "#ffffff", p: 2, borderRadius: 2, border: "1px solid #e2e8f0" }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 700, color: "#0f172a" }}>
-            UptimeRobot
+            Dashboard Menu
           </Typography>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {[
@@ -314,10 +500,133 @@ function Dashboard({ onLogout }) {
 
           <Card sx={{ mt: 2, bgcolor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
             <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Uptime Trend (Date-range zoom)
+              </Typography>
+              <Box sx={{ width: "100%", height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={uptimeRangeData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" stroke="#475569" />
+                    <YAxis stroke="#475569" unit="%" />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="uptime" stroke="#4caf50" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Grid container spacing={2} sx={{ mt: 2 }}>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ bgcolor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>CPU Usage %</Typography>
+                  <Box sx={{ height: 200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={performanceChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="time" hide />
+                        <YAxis domain={[0, 100]} stroke="#475569" />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="cpu" stroke="#ef4444" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ bgcolor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Memory Usage %</Typography>
+                  <Box sx={{ height: 200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={performanceChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="time" hide />
+                        <YAxis domain={[0, 100]} stroke="#475569" />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="mem" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ bgcolor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Disk Usage %</Typography>
+                  <Box sx={{ height: 200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={performanceChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="time" hide />
+                        <YAxis domain={[0, 100]} stroke="#475569" />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="disk" stroke="#10b981" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          <Card sx={{ mt: 2, bgcolor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Monitoring Data
+              </Typography>
+              <TableContainer component={Paper} sx={{ maxHeight: 280 }}>
+                <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>ID</TableCell>
+                      <TableCell>URL</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Port</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Interval</TableCell>
+                      <TableCell>Response</TableCell>
+                      <TableCell>Uptime</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredMonitors.map((m) => (
+                      <TableRow key={`mon-${m.id}`} hover>
+                        <TableCell>{m.id}</TableCell>
+                        <TableCell>{m.url}</TableCell>
+                        <TableCell>
+                          <Chip label={m.monitor_type || "HTTP"} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell>{m.port || "-"}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={m.status || "UNKNOWN"} 
+                            color={m.status === "UP" ? "success" : "error"} 
+                            size="small" 
+                          />
+                        </TableCell>
+                        <TableCell>{m.interval_time || m.interval || "N/A"}m</TableCell>
+                        <TableCell>{m.response_time || "-"}ms</TableCell>
+                        <TableCell>{calculateUptime(m.history)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+
+          <Card sx={{ mt: 2, bgcolor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}>
+            <CardContent>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={8}>
-                  <Typography gutterBottom variant="h6" sx={{ color: "#0f172a" }}>
-                    Add New Monitor (DB-backed system)
+                  <Typography gutterBottom variant="h6" sx={{ color: "#0f172a", textAlign: 'right' }}>
+                    Add monitoring URL
                   </Typography>
                   <Grid container spacing={1} alignItems="center">
                     <Grid item xs={12} md={6}>
@@ -439,6 +748,42 @@ function Dashboard({ onLogout }) {
               </Grid>
             ))}
           </Grid>
+
+          <Card sx={{ mt: 2, bgcolor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 10px 18px rgba(15, 23, 42, 0.05)" }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Recent Monitor Logs
+              </Typography>
+              <TableContainer component={Paper} sx={{ maxHeight: 340 }}>
+                <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date/Time</TableCell>
+                      <TableCell>URL</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Response (ms)</TableCell>
+                      <TableCell>CPU %</TableCell>
+                      <TableCell>Mem %</TableCell>
+                      <TableCell>Disk %</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>{new Date(log.created_at).toLocaleString()}</TableCell>
+                        <TableCell>{log.url}</TableCell>
+                        <TableCell>{log.status}</TableCell>
+                        <TableCell>{log.response_time}</TableCell>
+                        <TableCell>{log.cpu_usage ? log.cpu_usage.toFixed(1) : "-"}</TableCell>
+                        <TableCell>{log.mem_usage ? log.mem_usage.toFixed(1) : "-"}</TableCell>
+                        <TableCell>{log.disk_usage ? log.disk_usage.toFixed(1) : "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
         </Box>
       </Box>
 

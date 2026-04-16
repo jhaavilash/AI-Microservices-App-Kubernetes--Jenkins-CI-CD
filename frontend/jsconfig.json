@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "baseUrl": "src",
+    "paths": {
+      "assets/*": ["black-dashboard/assets/*"],
+      "components/*": ["black-dashboard/components/*"],
+      "contexts/*": ["black-dashboard/contexts/*"],
+      "layouts/*": ["black-dashboard/layouts/*"],
+      "views/*": ["black-dashboard/views/*"],
+      "variables/*": ["black-dashboard/variables/*"],
+      "routes.js": ["black-dashboard/routes.js"]
+    }
+  },
+  "include": ["src"]
+}

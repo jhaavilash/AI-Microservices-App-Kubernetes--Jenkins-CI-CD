@@ -1,5 +1,5 @@
 FROM node:18-alpine
 WORKDIR /app
 COPY . .
-RUN npm install express axios mysql2
+RUN npm install
 CMD ["node", "app.js"]

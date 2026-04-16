@@ -8,12 +8,16 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-function sendAlert(url) {
+function sendAlert(url, status) {
+  const isDown = status === "DOWN";
+  const subject = isDown ? `🚨 Website DOWN Alert: ${url}` : `✅ Website UP/RECOVERED: ${url}`;
+  const text = isDown ? `The monitor for ${url} has detected a DOWN status. Please investigate.` : `Good news! The monitor for ${url} has recovered and is now UP.`;
+
   transporter.sendMail({
     to: "your@gmail.com",
-    subject: "🚨 Website DOWN Alert",
-    text: `${url} is DOWN`
-  });
+    subject: subject,
+    text: text
+  }).catch(err => console.error("Email send error:", err));
 }
 
 module.exports = { sendAlert };

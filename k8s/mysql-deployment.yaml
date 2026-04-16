@@ -29,12 +29,11 @@ spec:
               name: mysql-secret
               key: password
         - name: MYSQL_DATABASE
-          value: sentiment_db
+          value: monitor_db
         ports:
         - containerPort: 3306
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
         
 ---
 apiVersion: v1

@@ -17,6 +17,8 @@
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.20.0",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.4"
+    "nodemailer": "^8.0.4",
+    "systeminformation": "^5.21.22",
+    "net": "^1.0.2"
   }
 }

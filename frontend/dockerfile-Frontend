@@ -1,9 +1,15 @@
-# Build React app
 FROM node:18 as build
-WORKDIR /app
-COPY . .
-RUN npm install && npm run build
 
-# Serve using nginx
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+COPY . .
+
+ENV CI=false
+ENV NODE_OPTIONS=--max_old_space_size=4096
+
+RUN npm run build
+
 FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html

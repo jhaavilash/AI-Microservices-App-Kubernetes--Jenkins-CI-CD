@@ -14,12 +14,50 @@ spec:
     spec:
       containers:
       - name: ml
-        image: python:3.9-slim
+        image: yourrepo/ml-service:1.0
+        imagePullPolicy: Always
+
         ports:
         - containerPort: 5000
+
+        command: ["python"]
+        args: ["app.py"]
+
         securityContext:
-          allowPrivilegeEscalation: false 
-          readOnlyRootFilesystem: true  
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
 
 ---
 apiVersion: v1
@@ -30,5 +68,8 @@ spec:
   selector:
     app: ml-service
   ports:
-  - port: 80
+  - protocol: TCP
+    port: 80
     targetPort: 5000
+  type: ClusterIP
+  
